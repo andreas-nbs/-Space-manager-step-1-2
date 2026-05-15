@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VLOO Host Space Manager Prototype</title>
+    <style>
+      :root {
+        --bg: #072739;
+        --sidebar: #052638;
+        --panel: #052c3e;
+        --field-bg: #0d3548;
+        --field-border: #a8c8e0;
+        --surface: #e0f0fb;
+        --surface-soft: #b8d7ea;
+        --muted: #91a8b4;
+        --brand: #087f9d;
+        --brand-soft: #0b7892;
+        --cta: #0785a5;
+        --white: #fff;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--white);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      button, input, textarea { font: inherit; }
+      button { cursor: pointer; }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 24px;
+        min-height: 100vh;
+        padding: 24px;
+      }
+      .sidebar {
+        border-radius: 10px;
+        background: var(--sidebar);
+        padding: 30px 22px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 58px;
+        margin: 0 6px 48px;
+        border-radius: 10px;
+        background: var(--brand);
+        font-size: 30px;
+        font-weight: 900;
+        letter-spacing: 5px;
+      }
+      .brand span { margin-left: 1px; font-size: 12px; letter-spacing: 0; font-weight: 800; }
+      .nav { display: grid; gap: 22px; }
+      .nav a {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        min-height: 52px;
+        border-radius: 6px;
+        padding: 0 16px;
+        color: var(--white);
+        text-decoration: none;
+        font-weight: 750;
+      }
+      .nav a.active { background: var(--field-border); color: #072739; }
+      .nav-icon { width: 24px; text-align: center; font-size: 18px; }
+
+      .main { padding: 22px 0 24px; }
+      .titlebar { display: flex; align-items: center; gap: 28px; margin: 0 0 28px; }
+      .back {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border: 0;
+        background: transparent;
+        color: var(--surface);
+        padding: 0;
+      }
+      .back svg { width: 28px; height: 28px; stroke-width: 1.8; }
+      h1 { margin: 0; font-size: 34px; line-height: 1.1; letter-spacing: 0; }
+      .panel {
+        min-height: calc(100vh - 136px);
+        border-radius: 22px;
+        background: var(--panel);
+        padding: 44px 48px 46px;
+      }
+
+      .progress {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0;
+        margin: 4px 56px 34px;
+        position: relative;
+      }
+      .progress::before {
+        content: "";
+        position: absolute;
+        top: 8px;
+        left: 0;
+        right: 0;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(224, 240, 251, 0.9);
+      }
+      .progress::after {
+        content: "";
+        position: absolute;
+        top: 8px;
+        left: 0;
+        right: 100%;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--brand);
+      }
+      .progress.at-environment::after { right: 50%; }
+      .step-indicator {
+        position: relative;
+        padding-top: 34px;
+        color: rgba(224, 240, 251, 0.58);
+        font-size: 19px;
+        font-weight: 750;
+      }
+      .step-indicator:nth-child(2) { text-align: center; }
+      .step-indicator:last-child { text-align: right; }
+      .step-indicator::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: #a1a6a8;
+        z-index: 1;
+      }
+      .step-indicator:first-child::before { left: 0; }
+      .step-indicator:nth-child(2)::before { left: 50%; transform: translateX(-50%); }
+      .step-indicator:last-child::before { right: 0; }
+      .step-indicator.active, .step-indicator.done { color: var(--surface); }
+      .step-indicator.active::before, .step-indicator.done::before { background: var(--brand); }
+
+      .step-page[hidden] { display: none; }
+      .section-heading { margin-bottom: 28px; }
+      h2 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; letter-spacing: 0; }
+      h3 {
+        margin: 0 0 18px;
+        color: var(--surface);
+        font-size: 22px;
+        line-height: 1.2;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+      .helper, .field-help { margin: 0; color: var(--surface-soft); line-height: 1.45; }
+      .field-help { margin-top: -3px; margin-bottom: 12px; font-size: 13px; }
+      .form-stack { display: grid; gap: 32px; }
+      .form-section { display: grid; gap: 20px; }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+        gap: 36px;
+        align-items: start;
+      }
+      .grid-3 { display: grid; grid-template-columns: 1.05fr 1fr 0.9fr; gap: 24px; }
+      label {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--surface);
+        font-size: 16px;
+        font-weight: 720;
+      }
+      .required { color: #f5a082; }
+      input, textarea {
+        width: 100%;
+        border: 3px solid var(--field-border);
+        border-radius: 10px;
+        background: var(--field-bg);
+        color: var(--white);
+        outline: none;
+        padding: 13px 18px;
+      }
+      input { min-height: 64px; }
+      textarea { min-height: 152px; resize: vertical; line-height: 1.45; }
+      textarea::placeholder { color: rgba(224, 240, 251, 0.68); }
+      input:focus, textarea:focus { border-color: #c7e1f1; box-shadow: 0 0 0 3px rgba(168, 200, 224, 0.18); }
+
+      .cover-preview { display: grid; align-content: start; gap: 12px; padding-top: 34px; }
+      .cover-preview label { margin-bottom: 0; }
+      .cover-preview img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 2px; }
+      .visual-block {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(310px, 0.95fr);
+        gap: 28px;
+        align-items: start;
+      }
+      .upload { display: grid; gap: 12px; }
+      .dropzone {
+        display: grid;
+        place-items: center;
+        min-height: 118px;
+        border: 2px dashed rgba(224, 240, 251, 0.9);
+        border-radius: 10px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .mobile-copy { display: none; }
+      .upload-icon { display: block; margin-bottom: 8px; color: var(--surface-soft); font-size: 25px; }
+      .thumbs { display: flex; gap: 8px; min-height: 34px; }
+      .thumbs img { width: 42px; height: 34px; object-fit: cover; border-radius: 4px; }
+      .signal-group { display: grid; gap: 18px; padding-top: 4px; }
+      .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+      .chip {
+        min-height: 40px;
+        border: 1px solid rgba(168, 200, 224, 0.58);
+        border-radius: 999px;
+        background: rgba(224, 240, 251, 0.08);
+        color: var(--surface);
+        padding: 9px 14px;
+        font-size: 14px;
+        font-weight: 720;
+      }
+      .chip.active { border-color: rgba(224, 240, 251, 0.82); background: var(--surface); color: #072739; }
+      .chip[disabled]:not(.active) { opacity: 0.45; cursor: not-allowed; }
+      .segmented {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 4px;
+        border-radius: 999px;
+        background: rgba(224, 240, 251, 0.08);
+      }
+      .segment {
+        min-height: 42px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--surface);
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 760;
+      }
+      .segment.active { background: var(--surface); color: #072739; }
+      .practical-grid {
+        display: grid;
+        grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+      }
+      .amenity-panel { display: grid; gap: 14px; border-radius: 10px; background: var(--brand-soft); padding: 22px; }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        min-height: 38px;
+        color: var(--surface);
+      }
+      .toggle {
+        position: relative;
+        width: 44px;
+        height: 22px;
+        border: 0;
+        border-radius: 999px;
+        background: #a8c8e0;
+      }
+      .toggle::before {
+        content: "";
+        position: absolute;
+        top: 4px;
+        left: 5px;
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: var(--brand);
+        transition: transform 0.18s ease;
+      }
+      .toggle.active { background: var(--white); }
+      .toggle.active::before { transform: translateX(20px); }
+      .public-preview {
+        margin-top: 28px;
+        border-radius: 12px;
+        background: rgba(224, 240, 251, 0.08);
+        padding: 20px;
+      }
+      .public-preview h3 { margin-bottom: 8px; }
+      .public-preview .chips { margin-top: 14px; }
+      .actions { display: flex; gap: 18px; margin-top: 34px; }
+      .btn {
+        min-width: 118px;
+        min-height: 48px;
+        border-radius: 6px;
+        padding: 14px 24px;
+        font-weight: 720;
+      }
+      .btn-primary { border: 1px solid var(--cta); background: var(--cta); color: var(--white); }
+      .btn-secondary { border: 1px solid var(--white); background: var(--white); color: var(--brand); }
+
+      @media (max-width: 1100px) {
+        .shell { grid-template-columns: 1fr; }
+        .sidebar { display: none; }
+        .grid-2, .visual-block, .practical-grid { grid-template-columns: 1fr; }
+        .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .cover-preview { padding-top: 0; }
+      }
+      @media (max-width: 680px) {
+        .shell { padding: 14px; }
+        .main { padding-top: 10px; }
+        .panel { padding: 28px 18px 18px; border-radius: 18px; }
+        .titlebar { gap: 14px; }
+        h1 { font-size: 28px; }
+        h2 { font-size: 22px; }
+        h3 { font-size: 20px; }
+        label { font-size: 15px; }
+        input { min-height: 56px; }
+        textarea { min-height: 118px; }
+        .form-stack { gap: 28px; }
+        .form-section { gap: 18px; }
+        .visual-block { gap: 12px; }
+        .progress { margin: 0 0 28px; }
+        .step-indicator { padding-top: 28px; font-size: 12px; line-height: 1.25; }
+        .grid-3 { grid-template-columns: 1fr; }
+        .dropzone { min-height: 58px; justify-items: start; padding: 0 16px; text-align: left; }
+        .dropzone > span { display: flex; align-items: center; gap: 10px; }
+        .upload-icon { display: inline; margin: 0; font-size: 20px; }
+        .desktop-copy { display: none; }
+        .mobile-copy { display: inline; }
+        .thumbs { min-height: 42px; }
+        .thumbs img { width: 50px; height: 42px; }
+        .chip { min-height: 44px; padding: 10px 14px; }
+        .segmented { display: grid; grid-template-columns: 1fr; border-radius: 12px; }
+        .segment { border-radius: 8px; }
+        .amenity-panel { padding: 18px; }
+        .toggle-row { min-height: 44px; }
+        .actions {
+          position: sticky;
+          bottom: 0;
+          z-index: 2;
+          margin: 28px -18px 0;
+          padding: 14px 18px 0;
+          background: linear-gradient(180deg, rgba(5, 44, 62, 0), var(--panel) 22%);
+        }
+        .btn { flex: 1; min-width: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Host portal navigation">
+        <div class="brand">VLOO<span>Pro</span></div>
+        <nav class="nav">
+          <a class="active" href="#"><span class="nav-icon">♟</span>Space manager</a>
+          <a href="#"><span class="nav-icon">▰</span>Messages</a>
+          <a href="#"><span class="nav-icon">⚙</span>Account</a>
+          <a href="#"><span class="nav-icon">▤</span>Analytics</a>
+          <a href="#"><span class="nav-icon">▣</span>Payments</a>
+          <a href="#"><span class="nav-icon">◈</span>Security and Privacy</a>
+          <a href="#"><span class="nav-icon">?</span>Contact</a>
+          <a href="#"><span class="nav-icon">↪</span>Log out</a>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <div class="titlebar">
+          <button class="back" type="button" aria-label="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 12H5"></path>
+              <path d="m12 19-7-7 7-7"></path>
+            </svg>
+          </button>
+          <h1>Add Space</h1>
+        </div>
+
+        <section class="panel">
+          <div class="progress at-details" aria-label="Add space progress">
+            <div class="step-indicator active" data-progress-step="details">Space details</div>
+            <div class="step-indicator" data-progress-step="environment">Work environment + details</div>
+            <div class="step-indicator" data-progress-step="availability">Availability</div>
+          </div>
+
+          <form>
+            <section class="step-page" data-page="details">
+              <div class="section-heading">
+                <h2>Space details</h2>
+                <p class="helper">Add the basic information users need before they decide where to work.</p>
+              </div>
+
+              <div class="grid-2">
+                <div class="form-stack">
+                  <section class="form-section" aria-labelledby="intro-heading">
+                    <h3 id="intro-heading">Space intro</h3>
+                    <div>
+                      <label for="spaceName">Space name</label>
+                      <input id="spaceName" value="VLOOTEST" />
+                    </div>
+                    <div>
+                      <label for="standout">What makes your space stand out? <span class="required">*</span></label>
+                      <p class="field-help">Write a short intro, around 25-40 words.</p>
+                      <input id="standout" value="Hotter than Hotmail" />
+                    </div>
+                    <div>
+                      <label for="introduce">Introduce your space</label>
+                      <textarea id="introduce">This is a test space.</textarea>
+                    </div>
+                  </section>
+
+                  <section class="form-section" aria-labelledby="location-heading">
+                    <h3 id="location-heading">Company / location</h3>
+                    <div class="grid-3">
+                      <div>
+                        <label for="company">Company name</label>
+                        <input id="company" value="VLOOTEST" />
+                      </div>
+                      <div>
+                        <label for="street">Street address</label>
+                        <input id="street" value="Krokvolden 14" />
+                      </div>
+                      <div>
+                        <label for="postcode">Post code</label>
+                        <input id="postcode" value="1369" />
+                      </div>
+                      <div>
+                        <label for="city">City</label>
+                        <input id="city" value="Stabekk" />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="form-section" aria-labelledby="availability-heading">
+                    <h3 id="availability-heading">Availability / working hours</h3>
+                    <div class="grid-3">
+                      <div>
+                        <label for="hours">Working hours</label>
+                        <input id="hours" value="08-17" />
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="cover-preview">
+                  <label>Upload Cover (image or video)</label>
+                  <img alt="Office with plants and work desks" src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=70" />
+                </div>
+              </div>
+
+              <div class="actions">
+                <button class="btn btn-primary" type="button" data-next>Next</button>
+              </div>
+            </section>
+
+            <section class="step-page" data-page="environment" hidden>
+              <div class="section-heading">
+                <h2>Work environment + details</h2>
+                <p class="helper">Describe the feel, layout, and practical details that help users picture their workday.</p>
+              </div>
+
+              <div class="form-stack">
+                <section class="form-section" aria-labelledby="environment-heading">
+                  <h3 id="environment-heading">Work environment</h3>
+                  <div class="visual-block">
+                    <div>
+                      <label for="environmentText">Work environment</label>
+                      <textarea id="environmentText" placeholder="Describe the atmosphere, work culture, and what it feels like to spend a day in your office."></textarea>
+                    </div>
+                    <div class="upload">
+                      <label>Work Environment Images</label>
+                      <div class="dropzone"><span><span class="upload-icon">⇧</span><span class="desktop-copy">Click or drag to add more</span><span class="mobile-copy">Add photos from phone</span></span></div>
+                      <div class="thumbs">
+                        <img alt="" src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=120&q=70" />
+                        <img alt="" src="https://images.unsplash.com/photo-1604328698692-f76ea9498e76?auto=format&fit=crop&w=120&q=70" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="visual-block">
+                    <div>
+                      <label for="layoutText">Space layout</label>
+                      <textarea id="layoutText" placeholder="Help users understand how the space is set up - from shared areas to focus zones and meeting spaces."></textarea>
+                    </div>
+                    <div class="upload">
+                      <label>Space Layout Images</label>
+                      <div class="dropzone"><span><span class="upload-icon">⇧</span><span class="desktop-copy">Click or drag to add more</span><span class="mobile-copy">Add photos from phone</span></span></div>
+                      <div class="thumbs"></div>
+                    </div>
+                  </div>
+
+                  <div class="visual-block">
+                    <div>
+                      <label for="hostText">Meet the Host</label>
+                      <textarea id="hostText" placeholder="Introduce your company and the people behind the workspace in a few friendly sentences."></textarea>
+                    </div>
+                    <div class="upload">
+                      <label>Meet the Host Images</label>
+                      <div class="dropzone"><span><span class="upload-icon">⇧</span><span class="desktop-copy">Click or drag to add more</span><span class="mobile-copy">Add photos from phone</span></span></div>
+                      <div class="thumbs">
+                        <img alt="" src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=120&q=70" />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="form-section signal-group" aria-labelledby="signals-heading">
+                  <h3 id="signals-heading">Workspace signals</h3>
+                  <div>
+                    <label>Workspace vibe</label>
+                    <p class="field-help">Choose up to 3 tags that describe the feel of your office.</p>
+                    <div class="chips" data-chip-group="vibe" data-max="3">
+                      <button class="chip active" type="button">Quiet</button>
+                      <button class="chip" type="button">Social</button>
+                      <button class="chip" type="button">Creative</button>
+                      <button class="chip" type="button">Professional</button>
+                      <button class="chip" type="button">Relaxed</button>
+                      <button class="chip" type="button">Startup energy</button>
+                      <button class="chip active" type="button">Focus-friendly</button>
+                      <button class="chip" type="button">Collaborative</button>
+                      <button class="chip" type="button">Modern</button>
+                      <button class="chip" type="button">Casual</button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label>Best suited for</label>
+                    <p class="field-help">Choose up to 3 work styles or users your space fits best.</p>
+                    <div class="chips" data-chip-group="suited" data-max="3">
+                      <button class="chip active" type="button">Freelancers</button>
+                      <button class="chip" type="button">Startups</button>
+                      <button class="chip" type="button">Remote workers</button>
+                      <button class="chip" type="button">Small teams</button>
+                      <button class="chip" type="button">Deep work</button>
+                      <button class="chip" type="button">Client meetings</button>
+                      <button class="chip" type="button">Hybrid teams</button>
+                      <button class="chip" type="button">Creative work</button>
+                    </div>
+                  </div>
+
+                  <div class="grid-2">
+                    <div>
+                      <label>Noise level</label>
+                      <p class="field-help">Help users understand the sound level of the office.</p>
+                      <div class="segmented" data-single-group="noise">
+                        <button class="segment active" type="button">Quiet</button>
+                        <button class="segment" type="button">Moderate</button>
+                        <button class="segment" type="button">Lively</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label>Energy level</label>
+                      <p class="field-help">Describe the general pace and atmosphere of the space.</p>
+                      <div class="segmented" data-single-group="energy">
+                        <button class="segment active" type="button">Calm</button>
+                        <button class="segment" type="button">Balanced</button>
+                        <button class="segment" type="button">High energy</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="form-section" aria-labelledby="practical-heading">
+                  <div>
+                    <h3 id="practical-heading">Practical details</h3>
+                    <p class="helper">Keep pricing and everyday office comforts easy to scan.</p>
+                  </div>
+                  <div class="practical-grid">
+                    <div>
+                      <label for="price">Price per desk per day, excl. VAT</label>
+                      <p class="field-help">VLOO charges a 15% commission fee per completed booking.</p>
+                      <input id="price" value="2000" />
+                    </div>
+                    <div>
+                      <label>Amenities <span class="required">*</span></label>
+                      <div class="amenity-panel">
+                        <div class="toggle-row"><span>Free coffee</span><button class="toggle active" type="button" aria-label="Toggle Free coffee"></button></div>
+                        <div class="toggle-row"><span>Free snacks</span><button class="toggle" type="button" aria-label="Toggle Free snacks"></button></div>
+                        <div class="toggle-row"><span>Shared lounge</span><button class="toggle active" type="button" aria-label="Toggle Shared lounge"></button></div>
+                        <div class="toggle-row"><span>Parking</span><button class="toggle" type="button" aria-label="Toggle Parking"></button></div>
+                        <div class="toggle-row"><span>Phone booths</span><button class="toggle" type="button" aria-label="Toggle Phone booths"></button></div>
+                        <div class="toggle-row"><span>Cafe</span><button class="toggle" type="button" aria-label="Toggle Cafe"></button></div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="public-preview" aria-live="polite">
+                  <h3>Public page tags</h3>
+                  <p class="helper">Prepared for the public space page. The preview prioritizes office feel first, then workstyle fit, then the selected atmosphere level.</p>
+                  <div class="chips" id="publicTags"></div>
+                </section>
+              </div>
+
+              <div class="actions">
+                <button class="btn btn-secondary" type="button" data-back>Back</button>
+                <button class="btn btn-primary" type="button">Next</button>
+              </div>
+            </section>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const pages = {
+        details: document.querySelector('[data-page="details"]'),
+        environment: document.querySelector('[data-page="environment"]')
+      };
+      const progressDetails = document.querySelector('[data-progress-step="details"]');
+      const progressEnvironment = document.querySelector('[data-progress-step="environment"]');
+      const progressAvailability = document.querySelector('[data-progress-step="availability"]');
+      const progress = document.querySelector(".progress");
+      const publicTags = document.querySelector("#publicTags");
+
+      function setStep(step) {
+        const isEnvironment = step === "environment";
+        pages.details.hidden = isEnvironment;
+        pages.environment.hidden = !isEnvironment;
+        progressDetails.classList.toggle("active", !isEnvironment);
+        progressDetails.classList.toggle("done", isEnvironment);
+        progressEnvironment.classList.toggle("active", isEnvironment);
+        progressAvailability.classList.remove("active", "done");
+        progress.classList.toggle("at-details", !isEnvironment);
+        progress.classList.toggle("at-environment", isEnvironment);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      function syncChipLimits(group) {
+        const max = Number(group.dataset.max || 3);
+        const chips = [...group.querySelectorAll(".chip")];
+        const selectedCount = chips.filter((chip) => chip.classList.contains("active")).length;
+        chips.forEach((chip) => {
+          chip.disabled = selectedCount >= max && !chip.classList.contains("active");
+        });
+      }
+
+      function collectPublicTags() {
+        const selectedVibe = [...document.querySelectorAll('[data-chip-group="vibe"] .chip.active')].map((chip) => chip.textContent);
+        const selectedSuited = [...document.querySelectorAll('[data-chip-group="suited"] .chip.active')].map((chip) => chip.textContent);
+        const noise = document.querySelector('[data-single-group="noise"] .segment.active')?.textContent;
+        const energy = document.querySelector('[data-single-group="energy"] .segment.active')?.textContent;
+        const tags = [
+          ...selectedVibe.slice(0, 2),
+          ...selectedSuited.slice(0, 1),
+          energy,
+          ...selectedSuited.slice(1),
+          noise,
+          ...selectedVibe.slice(2)
+        ].filter(Boolean).slice(0, 4);
+        publicTags.innerHTML = tags.map((tag) => `<span class="chip active">${tag}</span>`).join("");
+      }
+
+      document.querySelector("[data-next]").addEventListener("click", () => setStep("environment"));
+      document.querySelector("[data-back]").addEventListener("click", () => setStep("details"));
+      document.querySelectorAll("[data-chip-group]").forEach((group) => {
+        syncChipLimits(group);
+        group.addEventListener("click", (event) => {
+          const chip = event.target.closest(".chip");
+          if (!chip || chip.disabled) return;
+          chip.classList.toggle("active");
+          syncChipLimits(group);
+          collectPublicTags();
+        });
+      });
+      document.querySelectorAll("[data-single-group]").forEach((group) => {
+        group.addEventListener("click", (event) => {
+          const segment = event.target.closest(".segment");
+          if (!segment) return;
+          group.querySelectorAll(".segment").forEach((item) => item.classList.remove("active"));
+          segment.classList.add("active");
+          collectPublicTags();
+        });
+      });
+      document.querySelectorAll(".toggle").forEach((toggle) => {
+        toggle.addEventListener("click", () => toggle.classList.toggle("active"));
+      });
+      collectPublicTags();
+    </script>
+  </body>
+</html>
